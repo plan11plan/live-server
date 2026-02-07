@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 460px;
+            height: 640px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 헤더 */
+        .chat-header {
+            background: #4a90d9;
+            color: #fff;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h2 { font-size: 18px; font-weight: 600; }
+
+        .status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .status.connected { background: #4caf50; }
+        .status.disconnected { background: #e74c3c; }
+
+        /* 메시지 영역 */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+
+        .message.mine {
+            align-self: flex-end;
+            background: #4a90d9;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.others {
+            align-self: flex-start;
+            background: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message .sender {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 2px;
+            opacity: 0.8;
+        }
+
+        .message.system {
+            align-self: center;
+            background: transparent;
+            color: #999;
+            font-size: 12px;
+            padding: 4px;
+        }
+
+        /* 입력 영역 */
+        .chat-input {
+            padding: 12px 16px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .chat-input input:focus { border-color: #4a90d9; }
+
+        .chat-input button {
+            padding: 10px 20px;
+            background: #4a90d9;
+            color: #fff;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .chat-input button:hover { background: #3a7bc8; }
+        .chat-input button:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* 닉네임 입력 화면 */
+        .nickname-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .nickname-box {
+            background: #fff;
+            padding: 32px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+        }
+
+        .nickname-box h3 { margin-bottom: 16px; color: #333; }
+
+        .nickname-box input {
+            padding: 10px 14px;
+            border: 2px solid #4a90d9;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            width: 200px;
+        }
+
+        .nickname-box button {
+            display: block;
+            width: 200px;
+            margin-top: 12px;
+            padding: 10px;
+            background: #4a90d9;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .nickname-box button:hover { background: #3a7bc8; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <h2>Simple Chat</h2>
+        <span id="status" class="status disconnected">Disconnected</span>
+    </div>
+
+    <div id="messages" class="chat-messages"></div>
+
+    <div class="chat-input">
+        <input type="text" id="msgInput" placeholder="메시지를 입력하세요..." disabled>
+        <button id="sendBtn" onclick="sendMessage()" disabled>전송</button>
+    </div>
+</div>
+
+<!-- 닉네임 입력 오버레이 -->
+<div id="nicknameOverlay" class="nickname-overlay">
+    <div class="nickname-box">
+        <h3>닉네임을 입력하세요</h3>
+        <input type="text" id="nicknameInput" placeholder="닉네임" maxlength="12">
+        <button onclick="connect()">입장</button>
+    </div>
+</div>
+
+<script>
+    /**
+     * 브라우저의 WebSocket API
+     *
+     *   new Socket("127.0.0.1", 20000)  →  new WebSocket("ws://localhost:20000")
+     *   writer.println(msg)             →  ws.send(msg)
+     *   reader.readLine() (스레드)       →  ws.onmessage (이벤트 기반)
+     *   socket.close()                  →  ws.close()
+     */
+
+    let ws = null;
+    let nickname = '';
+
+    const messagesDiv = document.getElementById('messages');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusEl = document.getElementById('status');
+    const nicknameOverlay = document.getElementById('nicknameOverlay');
+    const nicknameInput = document.getElementById('nicknameInput');
+
+    // 엔터키로 닉네임 입력
+    nicknameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') connect();
+    });
+
+    // 엔터키로 메시지 전송
+    msgInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+
+    function connect() {
+        nickname = nicknameInput.value.trim();
+        if (!nickname) return;
+
+        nicknameOverlay.style.display = 'none';
+
+        // 원본: socket = new Socket("127.0.0.1", 20000);
+        ws = new WebSocket('ws://localhost:20000');
+
+        // 원본: System.out.println("*** Connected to server ***");
+        ws.onopen = () => {
+            statusEl.textContent = 'Connected';
+            statusEl.className = 'status connected';
+            msgInput.disabled = false;
+            sendBtn.disabled = false;
+            msgInput.focus();
+            addSystemMessage(nickname + '님으로 입장했습니다.');
+        };
+
+        // 원본의 ChatMsgReceiver 스레드 역할 (서버에서 오는 메시지 수신)
+        // while ((serverMsg = serverReader.readLine()) != null)
+        ws.onmessage = (event) => {
+            const data = event.data;
+
+            // "닉네임: 메시지" 형식 파싱
+            const colonIdx = data.indexOf(': ');
+            if (colonIdx !== -1) {
+                const sender = data.substring(0, colonIdx);
+                const text = data.substring(colonIdx + 2);
+                const isMine = (sender === nickname);
+                addMessage(sender, text, isMine);
+            } else {
+                addSystemMessage(data);
+            }
+        };
+
+        // 원본: System.out.println("*** Disconnected from server ***");
+        ws.onclose = () => {
+            statusEl.textContent = 'Disconnected';
+            statusEl.className = 'status disconnected';
+            msgInput.disabled = true;
+            sendBtn.disabled = true;
+            addSystemMessage('서버와 연결이 끊어졌습니다.');
+        };
+
+        ws.onerror = () => {
+            addSystemMessage('연결 오류가 발생했습니다.');
+        };
+    }
+
+    function sendMessage() {
+        const msg = msgInput.value.trim();
+        if (!msg || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+        // 원본: writer.println(msg);
+        // "닉네임: 메시지" 형식으로 전송
+        ws.send(nickname + ': ' + msg);
+        msgInput.value = '';
+        msgInput.focus();
+    }
+
+    function addMessage(sender, text, isMine) {
+        const div = document.createElement('div');
+        div.className = 'message ' + (isMine ? 'mine' : 'others');
+
+        if (!isMine) {
+            const senderDiv = document.createElement('div');
+            senderDiv.className = 'sender';
+            senderDiv.textContent = sender;
+            div.appendChild(senderDiv);
+        }
+
+        const textNode = document.createTextNode(text);
+        div.appendChild(textNode);
+
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addSystemMessage(text) {
+        const div = document.createElement('div');
+        div.className = 'message system';
+        div.textContent = text;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
