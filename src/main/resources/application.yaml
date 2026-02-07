@@ -1,3 +1,32 @@
 spring:
   application:
     name: live-server
+
+server:
+  port: 8080
+  tomcat:
+    mbeanregistry:
+      enabled: true
+    threads:
+      max: 200           # 최대 스레드 수 (커넥션 풀)
+    max-connections: 400 # 최대 동시 연결 수
+    accept-count: 100    # 대기 큐 크기 (커넥션 풀 초과 시 대기)
+    connection-timeout: 600000 # 10분 (600초)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: live-server
+    enable:
+      tomcat: true
+      jvm: true
+      process: true
+      system: true
+      http: true
